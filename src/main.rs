@@ -34,11 +34,11 @@ fn main() {
         .add_startup_system(setup_physics)
         .add_system(weapon_system)
         .add_system(camera_system)
-        .add_system(rocket_system)
+        // .add_system(rocket_system)
         .add_fixed_timestep(Duration::from_millis(17), "physics_timestep")
         .add_fixed_timestep_system("physics_timestep", 0, control_player)
         .add_fixed_timestep_system("physics_timestep", 0, jump_reset)
-        // .add_fixed_timestep_system("physics_timestep", 0, rocket_system)
+        .add_fixed_timestep_system("physics_timestep", 0, rocket_system)
 
         .run();
 }
