@@ -233,10 +233,8 @@ struct Jumper {
 }
 #[derive(Bundle)]
 struct WeaponBundle {
+    shape: ShapeBundle,
     weapon: Weapon,
-    material: Handle<ColorMaterial>,
-    mesh: Mesh2dHandle,
-    spatial_bundle: SpatialBundle,
 }
 
 #[derive(Component)]
@@ -249,16 +247,21 @@ impl WeaponBundle {
         mut materials: &mut ResMut<Assets<ColorMaterial>>,
 
     ) -> WeaponBundle {        
+
+        let shape = shapes::Rectangle {
+            extents: Vec2::new(50., 10.),
+            ..default()
+        };
         WeaponBundle {
+            shape: GeometryBuilder::build_as(&shape, DrawMode::Outlined {
+                fill_mode: FillMode::color(Color::hex("66567A").unwrap()),
+                outline_mode: StrokeMode::new(Color::BLACK, 1.0),
+            },
+                Transform::default()
+            ),
             weapon: Weapon,
 
 
-            mesh: meshes.add( shape::Quad::new(Vec2::new(50., 10.)).into() ).into(),
-            material: materials.add(ColorMaterial::from(Color::hex("000000").unwrap())),
-            spatial_bundle: SpatialBundle {
-                transform: Transform::from_xyz(0., 20., 5.),
-                ..default()
-            }
 
         }
     }
