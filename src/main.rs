@@ -1,9 +1,10 @@
 mod walls;
+use libm::atan2f;
 use walls::*;
 use std::{time::Duration};
 
-use bevy::{prelude::*, sprite::Mesh2dHandle, render::camera::RenderTarget};
-use bevy_rapier2d::{prelude::*, na::{Vector2, LpNorm, UniformNorm, vector}, rapier::prelude::ColliderType};
+use bevy::{prelude::*, render::camera::RenderTarget};
+use bevy_rapier2d::{prelude::*, na::{Vector2, vector}};
 use iyes_loopless::prelude::*;
 use bevy_prototype_lyon::{prelude::{*, FillMode}, entity::ShapeBundle};
 
@@ -49,12 +50,10 @@ fn setup_graphics(mut commands: Commands) {
 
 fn setup_physics(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     commands.spawn(PlayerBundle::new());
 
-    commands.spawn(WeaponBundle::new(&mut meshes, &mut materials));
+    commands.spawn(WeaponBundle::new());
 
     commands.spawn(WallBundle::new(WallLocation::Left));
     commands.spawn(WallBundle::new(WallLocation::Right));
@@ -160,6 +159,10 @@ fn weapon_system(
     let player = playerq.single();
     weap.0.translation.x = player.0.translation.x;
     weap.0.translation.y = player.0.translation.y + 20.;
+    let angle = Vec2::new(weap.0.translation.x - cursor_location.x, weap.0.translation.y - cursor_location.y);
+    let rads = atan2f(angle.y, angle.x);
+    let rot = Quat::from_euler(EulerRot::XYZ, 0., 0., rads);
+    weap.0.rotation = rot;
 
     if buttons.just_pressed(MouseButton::Left) {
         commands.spawn(RocketBundle::new(weap.0.translation, cursor_location));
@@ -171,8 +174,6 @@ fn weapon_system(
 struct PlayerBundle {
     player: Player,
     rigidbody: RigidBody,
-    // mesh: Mesh2dHandle,
-    // material: Handle<ColorMaterial>,
     shape: ShapeBundle,
     collider: Collider,
     restitution: Restitution,
@@ -189,7 +190,7 @@ impl PlayerBundle {
     fn new(
 
     ) -> PlayerBundle {
-        
+
         let shape = shapes::Circle {
             radius: 20.,
             ..default()
@@ -243,8 +244,6 @@ struct Weapon;
 
 impl WeaponBundle {
     fn new(
-        mut meshes: &mut ResMut<Assets<Mesh>>,
-        mut materials: &mut ResMut<Assets<ColorMaterial>>,
 
     ) -> WeaponBundle {        
 
@@ -254,7 +253,7 @@ impl WeaponBundle {
         };
         WeaponBundle {
             shape: GeometryBuilder::build_as(&shape, DrawMode::Outlined {
-                fill_mode: FillMode::color(Color::hex("66567A").unwrap()),
+                fill_mode: FillMode::color(Color::hex("000000").unwrap()),
                 outline_mode: StrokeMode::new(Color::BLACK, 1.0),
             },
                 Transform::default()
@@ -374,18 +373,18 @@ fn rocket_system(
 
     mut rapier_context: Res<RapierContext>,
 ) {
-        for rocket in rocketq.iter() {
+    for rocket in rocketq.iter() {
 
-    for (h1, h2, intersecting) in rapier_context.intersections_with(rocket) {
+        for (h1, h2, intersecting) in rapier_context.intersections_with(rocket) {
 
-                if h1 == rocket || h2 == rocket {
-                    println!("in event");
-                    commands.entity(rocket).despawn();
+            if h1 == rocket || h2 == rocket {
+                println!("in event");
+                commands.entity(rocket).despawn();
 
-                }
+            }
         }
 
 
-        }
+    }
 
 }

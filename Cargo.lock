@@ -2718,6 +2718,7 @@ dependencies = [
  "bevy_prototype_lyon",
  "bevy_rapier2d",
  "iyes_loopless",
+ "libm",
  "nalgebra",
 ]
 

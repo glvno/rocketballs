@@ -11,6 +11,7 @@ bevy_rapier2d = "*"
 bevy_prototype_lyon = "*"
 iyes_loopless = { version = "0.9.1", features = ["fixedtimestep"] }
 nalgebra = "0.32.1"
+libm = "0.2.6"
 
 
 [profile.dev]
