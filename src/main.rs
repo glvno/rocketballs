@@ -11,18 +11,33 @@ use bevy_prototype_lyon::{prelude::{*, FillMode}, entity::ShapeBundle};
 const WALL_COLOR: Color = Color::rgb(0.8, 0.8, 0.8);
 const BALL_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
 const BACKGROUND_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
-const WALL_THICKNESS: f32 = 10.0;
+const WALL_THICKNESS: f32 = BALL_RADIUS;
 // x coordinates
-const LEFT_WALL: f32 = -450.;
-const RIGHT_WALL: f32 = 450.;
+const LEFT_WALL: f32 = -1000.;
+const RIGHT_WALL: f32 = 1000.;
 // y coordinates
-const BOTTOM_WALL: f32 = -300.;
-const TOP_WALL: f32 = 300.;
+const BOTTOM_WALL: f32 = -1000.;
+const TOP_WALL: f32 = 1000.;
+const BALL_RADIUS: f32 = 40.;
+const ROCKET_VELOCITY: f32 = 25. * BALL_RADIUS;
+const ROCKET_KNOCKBACK: f32 = 25. * BALL_RADIUS;
+const ROCKET_KNOCKBACK_RADIUS: f32 = 2.5 * BALL_RADIUS;
+const WEAPON_LENGTH: f32 = 2.5 * BALL_RADIUS;
+const WEAPON_WIDTH: f32 = 0.5 * BALL_RADIUS;
+const ROCKET_RADIUS: f32 = 0.25 * BALL_RADIUS;
+const WEAPON_OFFSET: f32 = 1.25 * BALL_RADIUS;
+const CAMERA_HEIGHT: f32 = 200.;
+const PIXELS_PER_METER: f32 = 2. * BALL_RADIUS;
+const AIRCONTROL_CAP: f32 = -1. * 5. * BALL_RADIUS;
+const AIRCONTROL: f32 = BALL_RADIUS/7.;
+const PLAYER_ANGVEL: f32 = 0.05;
+const JUMP_IMPULSE: f32 = 5. * BALL_RADIUS;
+const KNOCKBACK_DIVISOR: f32 = BALL_RADIUS - 1.;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(40.0))
+        .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(PIXELS_PER_METER))
         .add_plugin(RapierDebugRenderPlugin::default())
         // .add_plugin(LogDiagnosticsPlugin::default())
 
@@ -51,7 +66,8 @@ fn setup_graphics(mut commands: Commands) {
 fn setup_physics(
     mut commands: Commands,
 ) {
-    commands.spawn(PlayerBundle::new());
+    commands.spawn(BallBundle::new()).insert(Player);
+    commands.spawn(BallBundle::new());
 
     commands.spawn(WeaponBundle::new());
 
@@ -85,33 +101,39 @@ fn jump_check(entity: Entity, jumper: &mut Jumper, event: &CollisionEvent) {
 
 fn control_player(
     keys: Res<Input<KeyCode>>,
-    mut query: Query<(&mut Jumper, &mut Velocity), With<Player>>,
+    mut query: Query<(Entity, &mut Jumper, &mut Velocity), With<Player>>,
+    mut commands: Commands
 ) {
-    let   (mut jumper, mut velocity) = query.single_mut();
+    let   (entity, mut jumper, mut velocity) = query.single_mut();
+    let mut impulse = ExternalImpulse {
+        impulse: Vec2::new(0.0, 0.0),
+        torque_impulse: 0.0
+    };
     if keys.just_released(KeyCode::Space) && !jumper.is_jumping {
-        velocity.linvel.y += jumper.jump_impulse * jumper.jump_multiplier;
+        impulse.impulse = Vec2::new(0., JUMP_IMPULSE * jumper.jump_multiplier);
         jumper.is_jumping = true;
         jumper.jump_multiplier = 1.;
     }
 
     if keys.pressed(KeyCode::A) {
 
-        velocity.angvel += jumper.roll_impulse;
+        impulse.torque_impulse = jumper.roll_impulse;
 
-        if jumper.is_jumping && velocity.linvel.x > -100.{
-            velocity.linvel.x -= 3.;
+        if jumper.is_jumping && velocity.linvel.x > AIRCONTROL_CAP{
+            velocity.linvel.x -= AIRCONTROL;
         }
 
     }
 
     if keys.pressed(KeyCode::D) {
 
-        velocity.angvel -= jumper.roll_impulse;
+        impulse.torque_impulse = 0. - jumper.roll_impulse;
 
-        if jumper.is_jumping && velocity.linvel.x < 100. {
-            velocity.linvel.x += 3.;
+        if jumper.is_jumping && velocity.linvel.x < AIRCONTROL_CAP {
+            velocity.linvel.x += AIRCONTROL;
         }
-    }    if keys.pressed(KeyCode::Space) {
+    }    
+    if keys.pressed(KeyCode::Space) {
 
         velocity.angvel = 0.0;
         if velocity.linvel.x.abs() < 2. {
@@ -120,6 +142,13 @@ fn control_player(
             jumper.jump_multiplier += 0.01;
         }
     }
+    if velocity.angvel <  -30. {
+        velocity.angvel = -30.;
+    } else if velocity.angvel > 30. {
+        velocity.angvel = 30.
+    }
+
+    commands.entity(entity).insert(impulse);
 
 }
 
@@ -133,7 +162,7 @@ fn camera_system(
     let mut cam = camq.get_single_mut().unwrap();
     let transform = playerq.get_single().unwrap();
     cam.0.translation.x = transform.0.translation.x;
-    cam.0.translation.y = transform.0.translation.y + 200.;
+    cam.0.translation.y = transform.0.translation.y + CAMERA_HEIGHT;
 }
 
 fn weapon_system(
@@ -158,7 +187,7 @@ fn weapon_system(
     let  mut weap = weapq.single_mut();
     let player = playerq.single();
     weap.0.translation.x = player.0.translation.x;
-    weap.0.translation.y = player.0.translation.y + 20.;
+    weap.0.translation.y = player.0.translation.y + WEAPON_OFFSET;
     let angle = Vec2::new(weap.0.translation.x - cursor_location.x, weap.0.translation.y - cursor_location.y);
     let rads = atan2f(angle.y, angle.x);
     let rot = Quat::from_euler(EulerRot::XYZ, 0., 0., rads);
@@ -171,8 +200,8 @@ fn weapon_system(
 }
 
 #[derive(Bundle)]
-struct PlayerBundle {
-    player: Player,
+struct BallBundle {
+    ball: Ball,
     rigidbody: RigidBody,
     shape: ShapeBundle,
     collider: Collider,
@@ -181,35 +210,36 @@ struct PlayerBundle {
     jumper: Jumper,
     velocity: Velocity,
     friction: Friction,
+    gravity_scale: GravityScale
 
 }
 
 #[derive(Component)]
 struct Player;
-impl PlayerBundle {
+impl BallBundle {
     fn new(
 
-    ) -> PlayerBundle {
+    ) -> BallBundle {
 
         let shape = shapes::Circle {
-            radius: 20.,
+            radius: BALL_RADIUS,
             ..default()
         };
-        PlayerBundle {
-            player: Player,
+        BallBundle {
+            ball: Ball,
             rigidbody: RigidBody::Dynamic,
             shape: GeometryBuilder::build_as(&shape, DrawMode::Outlined {
                 fill_mode: FillMode::color(Color::hex("66567A").unwrap()),
                 outline_mode: StrokeMode::new(Color::BLACK, 1.0),
             },
-                Transform::default()
+                Transform::from_xyz(0., 0., 0.)
             ),
-            collider: Collider::ball(20.),
-            restitution: Restitution::coefficient(0.0),
+            collider: Collider::ball(BALL_RADIUS),
+            restitution: Restitution::coefficient(0.1),
             active_events: ActiveEvents::COLLISION_EVENTS,
             jumper: Jumper {
-                jump_impulse: 100.,
-                roll_impulse: 0.2, 
+                jump_impulse: JUMP_IMPULSE,
+                roll_impulse: PLAYER_ANGVEL, 
                 is_jumping: false,
                 jump_multiplier: 1.
             },
@@ -218,6 +248,7 @@ impl PlayerBundle {
                 angvel: 0.2,
             },
             friction: Friction::coefficient(2.0),
+            gravity_scale: GravityScale(5.0)
         }
 
     }
@@ -248,7 +279,7 @@ impl WeaponBundle {
     ) -> WeaponBundle {        
 
         let shape = shapes::Rectangle {
-            extents: Vec2::new(50., 10.),
+            extents: Vec2::new(WEAPON_LENGTH, WEAPON_WIDTH),
             ..default()
         };
         WeaponBundle {
@@ -256,7 +287,7 @@ impl WeaponBundle {
                 fill_mode: FillMode::color(Color::hex("000000").unwrap()),
                 outline_mode: StrokeMode::new(Color::BLACK, 1.0),
             },
-                Transform::default()
+                Transform::from_xyz(0., 0., 1.)
             ),
             weapon: Weapon,
 
@@ -338,12 +369,12 @@ impl RocketBundle {
     ) -> RocketBundle {
         let velo = get_rocket_velocity(player_position, cursor_position);
         let shape = shapes::Circle {
-            radius: 5.,
+            radius: ROCKET_RADIUS,
             ..default()
         };
         RocketBundle {
             rocket: Rocket,
-            collider: Collider::ball(5.0),
+            collider: Collider::ball(ROCKET_RADIUS),
             sensor: Sensor,
             active_events: ActiveEvents::COLLISION_EVENTS,
             rigid_body: RigidBody::KinematicVelocityBased,
@@ -353,7 +384,7 @@ impl RocketBundle {
                 ,
                 outline_mode: StrokeMode::new(Color::BLACK, 1.0),
             },
-                Transform::from_xyz(player_position.x, player_position.y+10., 0.)
+                Transform::from_xyz(player_position.x, player_position.y, 0.)
             ),
         }
     }
@@ -364,22 +395,43 @@ fn get_rocket_velocity(player_position: Vec3, cursor_position: Vec3) -> Vec2 {
     let delta_x = cursor_position.x - player_position.x;
     let vec: Vector2<f32> = vector![delta_x, delta_y];
     let normalized = vec.normalize();
-    return Vec2::new(normalized.x * 300., normalized.y * 300.)
+    return Vec2::new(normalized.x * ROCKET_VELOCITY, normalized.y * ROCKET_VELOCITY)
 }
 
 fn rocket_system(
-    rocketq: Query<(Entity), With<Rocket>>,
+    rocketq: Query<(Entity, &Transform), With<Rocket>>,
+
+    playerq: Query<(Entity), With<Player>>,
+
+    mut ballq: Query<(Entity, &Transform), With<Ball>>,
     mut commands: Commands,
 
     mut rapier_context: Res<RapierContext>,
 ) {
-    for rocket in rocketq.iter() {
+    let player = playerq.single();
+    for (rocket, rocket_transform) in rocketq.iter() {
 
         for (h1, h2, intersecting) in rapier_context.intersections_with(rocket) {
 
-            if h1 == rocket || h2 == rocket {
-                println!("in event");
+            if h1 == player || h2 == player {
+                continue
+            } else {
                 commands.entity(rocket).despawn();
+
+            }
+            for (balle, mut ball_transform) in ballq.iter_mut() {
+                let dist = rocket_transform.translation.distance(ball_transform.translation);
+                if dist <= ROCKET_KNOCKBACK_RADIUS {
+                    let dx =  ball_transform.translation.x - rocket_transform.translation.x;
+                    let dy = ball_transform.translation.y - rocket_transform.translation.y;
+                    let vec: Vector2<f32> = vector![dx, dy];
+                    let normalized = vec.normalize();
+                    commands.entity(balle).insert(ExternalImpulse {
+                        impulse: Vec2::new(normalized.x * ROCKET_KNOCKBACK * dist / ROCKET_KNOCKBACK_RADIUS, normalized.y * ROCKET_KNOCKBACK * dist/ROCKET_KNOCKBACK_RADIUS),
+                        ..default()
+                    });
+                }
+
 
             }
         }
@@ -388,3 +440,5 @@ fn rocket_system(
     }
 
 }
+#[derive(Component)]
+struct Ball;

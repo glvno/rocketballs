@@ -66,8 +66,8 @@ impl WallBundle {
                 },
                 ..default()
             },
-            collider: Collider::cuboid(location.size().x/20., location.size().y/20.),
-            friction: Friction::coefficient(1.0)
+            collider: Collider::cuboid(location.size().x/PIXELS_PER_METER, location.size().y/PIXELS_PER_METER),
+            friction: Friction::coefficient(2.0)
             ,
         }
     }
