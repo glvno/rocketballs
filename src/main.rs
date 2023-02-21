@@ -38,7 +38,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(PIXELS_PER_METER))
-        .add_plugin(RapierDebugRenderPlugin::default())
+        // .add_plugin(RapierDebugRenderPlugin::default())
         // .add_plugin(LogDiagnosticsPlugin::default())
 
         .add_plugin(ShapePlugin)
@@ -420,14 +420,22 @@ fn rocket_system(
 
             }
             for (balle, mut ball_transform) in ballq.iter_mut() {
-                let dist = rocket_transform.translation.distance(ball_transform.translation);
+                let dist_between_transforms = rocket_transform.translation.distance(ball_transform.translation);
+                let dist = dist_between_transforms - BALL_RADIUS;
+
                 if dist <= ROCKET_KNOCKBACK_RADIUS {
+                    let knockback_pct = 1. - (dist/ROCKET_KNOCKBACK_RADIUS);
+                    let knockback = knockback_pct * ROCKET_KNOCKBACK;
                     let dx =  ball_transform.translation.x - rocket_transform.translation.x;
                     let dy = ball_transform.translation.y - rocket_transform.translation.y;
                     let vec: Vector2<f32> = vector![dx, dy];
                     let normalized = vec.normalize();
                     commands.entity(balle).insert(ExternalImpulse {
-                        impulse: Vec2::new(normalized.x * ROCKET_KNOCKBACK * dist / ROCKET_KNOCKBACK_RADIUS, normalized.y * ROCKET_KNOCKBACK * dist/ROCKET_KNOCKBACK_RADIUS),
+                        // get distance from center of explosion to exterior of ball
+                        // get percentage of blast radius that that distance represents
+                        // knockback is 100 minus that percentage of knockback
+
+                        impulse: Vec2::new(normalized.x * knockback, normalized.y * knockback),
                         ..default()
                     });
                 }
